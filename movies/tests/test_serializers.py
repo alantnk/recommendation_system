@@ -5,18 +5,19 @@ from movies.serializers import MovieSerializer
 
 
 @pytest.mark.django_db
-def test_valid_movie_serializer():
+def test_valid_movie_serializer() -> None:
     # Given valid movie data
-    valid_data = {
-        "title": "Inception",
-        "genres": ["Action", "Sci-Fi"]
-    }
+    valid_data = {"title": "Inception", "genres": ["Action", "Sci-Fi"]}
+
     # When we create a serializer instance with this data
     serializer = MovieSerializer(data=valid_data)
-    # Then, the serializer should be a valid
+
+    # Then serializer should be valid
     assert serializer.is_valid()
+
     # When saving the serializer
     movie = serializer.save()
+
     # Then a movie instance should be created with the given data
     assert Movie.objects.count() == 1
     created_movie = Movie.objects.get()
@@ -25,29 +26,31 @@ def test_valid_movie_serializer():
 
 
 @pytest.mark.django_db
-def test_invalid_movie_serializer():
+def test_invalid_movie_serializer() -> None:
     # Given invalid movie data (missing required "title" field)
-    invalid_data = {
-        "genres": ["Action", "Sci-Fi"]
-    }
+    invalid_data = {"genres": ["Action", "Sci-Fi"]}
+
     # When we create a serializer instance with this data
     serializer = MovieSerializer(data=invalid_data)
+
     # Then serializer should not be valid
     assert not serializer.is_valid()
-    # It should contain an error message for the missing "title" field
+
+    # And it should contain an error message for the missing "title" field
     assert "title" in serializer.errors
 
 
 @pytest.mark.django_db
-def test_serialize_movie_instance():
+def test_serialize_movie_instance() -> None:
     # Given a movie instance
-    movie = Movie.objects.create(title="Inception", genres=
-    ["Action", "Sci-Fi"])
+    movie = Movie.objects.create(title="Inception", genres=["Action", "Sci-Fi"])
+
     # When we serialize the movie
     serializer = MovieSerializer(movie)
-    # Then the resulting JSON data should contain the movie's details
+
+    # Then the resulting JSON data should contain the movie"s details
     assert serializer.data == {
         "id": movie.id,
         "title": movie.title,
-        "genres": movie.genres
+        "genres": movie.genres,
     }
