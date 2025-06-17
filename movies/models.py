@@ -2,6 +2,7 @@ from django.db import models
 
 
 class Movie(models.Model):
+    objects = models.Manager()
     title = models.CharField(max_length=255)
     genres = models.JSONField(default=list)
 
