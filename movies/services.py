@@ -1,11 +1,12 @@
 import csv
+import datetime
 import json
 from collections import defaultdict
-from datetime import datetime
-from typing import Any, Callable, Dict, Tuple
+from typing import IO, Any, Callable, Dict, Tuple
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 
@@ -35,7 +36,10 @@ def add_preference(user_id: int, new_preferences: Dict[str, Any]) -> None:
     """
     with transaction.atomic():
         user = get_object_or_404(get_user_model(), id=user_id)
-        (user_preferences_obj, created) = UserMoviePreferences.objects.select_for_update().get_or_create(
+        (
+            user_preferences_obj,
+            created,
+        ) = UserMoviePreferences.objects.select_for_update().get_or_create(
             user_id=user.id, defaults={"preferences": {}}
         )
 
@@ -67,7 +71,7 @@ def add_watch_history(user_id: int, movie_id: int) -> None:
         "director": movie.extra_data.get("directors", []),
         "genre": movie.genres,
     }
-    (user_preferences_obj, created) = UserMoviePreferences.objects.get_or_create(
+    user_preferences_obj, created = UserMoviePreferences.objects.get_or_create(
         user_id=user_id, defaults={"watch_history": [movie_info]}
     )
     if not created:
@@ -89,7 +93,7 @@ def create_or_update_movie(
     Service function to create or update a Movie instance.
     """
     # Ensure the release_year is within an acceptable range
-    current_year = datetime.now().year
+    current_year = datetime.datetime.now().year
     if release_year is not None and (
             release_year < 1888 or release_year > current_year
     ):
@@ -110,37 +114,41 @@ def create_or_update_movie(
     return movie, created
 
 
-def parse_csv(file_path: str) -> int:
+def parse_csv(file: IO[Any]) -> int:
     movies_processed = 0
-    with open(file_path, encoding="utf-8") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            create_or_update_movie(**row)
-            movies_processed += 1
+    reader = csv.DictReader(file)
+    for row in reader:
+        create_or_update_movie(**row)
+        movies_processed += 1
     return movies_processed
 
 
-def parse_json(file_path: str) -> int:
+def parse_json(file: IO[Any]) -> int:
     movies_processed = 0
-    with open(file_path, encoding="utf-8") as file:
-        data = json.load(file)
-        for item in data:
-            create_or_update_movie(**item)
-            movies_processed += 1
+    data = json.load(file)
+    for item in data:
+        create_or_update_movie(**item)
+        movies_processed += 1
     return movies_processed
 
 
 class FileProcessor:
-    def process(self, file_path: str, file_type: str) -> int:
-        if file_type == "text/csv":
-            movies_processed = self.process_file(file_path, parse_csv)
-        elif file_type == "application/json":
-            movies_processed = self.process_file(file_path, parse_json)
+    def process(self, file_name: str, file_type: str) -> int:
+        # Check if the file exists in the default storage
+        if default_storage.exists(file_name):
+            # Open the file directly from storage
+            with default_storage.open(file_name, "r") as file:
+                if file_type == "text/csv":
+                    movies_processed = parse_csv(file)
+                elif file_type == "application/json":
+                    movies_processed = parse_json(file)
+                else:
+                    raise ValidationError("Invalid file type")
+                return movies_processed
         else:
-            raise ValidationError("Invalid file type")
+            raise ValidationError("File does not exist in storage.")
 
-        return movies_processed
-
-    @staticmethod
-    def process_file(file_path: str, parser_function: Callable[[str], int]) -> int:
+    def process_file(
+            self, file_path: str, parser_function: Callable[[str], int]
+    ) -> int:
         return parser_function(file_path)
